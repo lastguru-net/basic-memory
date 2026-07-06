@@ -247,6 +247,13 @@ class BasicMemoryConfig(BaseSettings):
         default="bge-small-en-v1.5",
         description="Embedding model identifier used by the local provider.",
     )
+    semantic_embedding_api_base: str | None = Field(
+        default=None,
+        description=(
+            "Optional custom API base URL for the LiteLLM embedding provider. "
+            "Use this for OpenAI-compatible local or self-hosted embedding servers."
+        ),
+    )
     semantic_embedding_dimensions: int | None = Field(
         default=None,
         description=(

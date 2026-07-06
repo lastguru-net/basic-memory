@@ -9,9 +9,9 @@ from basic_memory.config import BasicMemoryConfig, default_fastembed_cache_dir
 from basic_memory.repository.embedding_provider import EmbeddingProvider
 
 # Cache key fields are limited to values that change the *identity* of the loaded
-# model (provider, model_name, dimensions, LiteLLM role/input-type/forward-dimension
-# settings, batch/request knobs that affect the LiteLLM identity, and the resolved
-# cache dir). Thread/parallel knobs are deliberately excluded — they change ONNX
+# model (provider, model_name, dimensions, LiteLLM endpoint/role/input-type/
+# forward-dimension settings, batch/request knobs that affect the LiteLLM identity,
+# and the resolved cache dir). Thread/parallel knobs are deliberately excluded — they change ONNX
 # *execution* only, not the loaded weights. Including them caused #872: in a
 # container/cgroup the CPU-derived thread count can drift between calls, producing
 # a fresh cache key and reloading the ~2.3GB model into a CPU arena that never
@@ -19,6 +19,7 @@ from basic_memory.repository.embedding_provider import EmbeddingProvider
 type ProviderCacheKey = tuple[
     str,
     str,
+    str | None,
     int | None,
     bool | None,
     int,
@@ -99,6 +100,7 @@ def _provider_cache_key(app_config: BasicMemoryConfig) -> ProviderCacheKey:
     return (
         app_config.semantic_embedding_provider.strip().lower(),
         app_config.semantic_embedding_model,
+        app_config.semantic_embedding_api_base,
         app_config.semantic_embedding_dimensions,
         app_config.semantic_embedding_forward_dimensions,
         app_config.semantic_embedding_batch_size,
@@ -194,6 +196,7 @@ def create_embedding_provider(app_config: BasicMemoryConfig) -> EmbeddingProvide
             )
         provider = LiteLLMEmbeddingProvider(
             model_name=model_name,
+            api_base=app_config.semantic_embedding_api_base,
             batch_size=app_config.semantic_embedding_batch_size,
             request_concurrency=app_config.semantic_embedding_request_concurrency,
             document_input_type=app_config.semantic_embedding_document_input_type,

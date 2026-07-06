@@ -123,6 +123,48 @@ async def test_litellm_provider_api_key_omitted_when_none(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_litellm_provider_api_base_forwarded(monkeypatch):
+    """api_base should be passed to litellm.aembedding when configured."""
+    calls = _install_litellm_stub(monkeypatch)
+    provider = LiteLLMEmbeddingProvider(
+        model_name="openai/local-embedding-model",
+        api_base="http://127.0.0.1:8080/v1",
+        dimensions=3,
+    )
+
+    await provider.embed_query("test")
+
+    assert calls[0]["api_base"] == "http://127.0.0.1:8080/v1"
+
+
+@pytest.mark.asyncio
+async def test_litellm_provider_api_base_omitted_when_none(monkeypatch):
+    """api_base should not override LiteLLM's endpoint resolution when unset."""
+    calls = _install_litellm_stub(monkeypatch)
+    provider = LiteLLMEmbeddingProvider(dimensions=3)
+
+    await provider.embed_query("test")
+
+    assert "api_base" not in calls[0]
+
+
+def test_litellm_provider_identity_key_includes_api_base():
+    """Different endpoints can return different vectors for the same model name."""
+    default_endpoint = LiteLLMEmbeddingProvider(dimensions=3)
+    custom_endpoint = LiteLLMEmbeddingProvider(
+        dimensions=3,
+        api_base="http://127.0.0.1:8080/v1",
+    )
+
+    assert default_endpoint.identity_key() == (
+        "openai/text-embedding-3-small:3:document_input_type=-:"
+        "query_input_type=-:forward_dimensions=true"
+    )
+    assert "api_base=http://127.0.0.1:8080/v1" in custom_endpoint.identity_key()
+    assert default_endpoint.identity_key() != custom_endpoint.identity_key()
+
+
+@pytest.mark.asyncio
 async def test_litellm_provider_drop_params_always_set(monkeypatch):
     """drop_params=True should always be in the call kwargs."""
     calls = _install_litellm_stub(monkeypatch)
@@ -331,6 +373,54 @@ def test_factory_maps_default_model_for_litellm():
     provider = create_embedding_provider(config)
     assert isinstance(provider, LiteLLMEmbeddingProvider)
     assert provider.model_name == "openai/text-embedding-3-small"
+
+
+@pytest.mark.asyncio
+async def test_factory_forwards_litellm_api_base(monkeypatch):
+    """Factory should pass the configured custom endpoint to LiteLLM calls."""
+    calls = _install_litellm_stub(monkeypatch)
+    config = BasicMemoryConfig(
+        env="test",
+        projects={"test": "/tmp/basic-memory-test"},
+        default_project="test",
+        semantic_search_enabled=True,
+        semantic_embedding_provider="litellm",
+        semantic_embedding_model="openai/local-embedding-model",
+        semantic_embedding_api_base="http://127.0.0.1:8080/v1",
+        semantic_embedding_dimensions=3,
+    )
+
+    provider = create_embedding_provider(config)
+    assert isinstance(provider, LiteLLMEmbeddingProvider)
+    await provider.embed_query("test")
+
+    assert calls[0]["api_base"] == "http://127.0.0.1:8080/v1"
+
+
+def test_factory_cache_separates_litellm_api_bases():
+    """Changing endpoints should create a provider with a distinct cache identity."""
+    shared_config = {
+        "env": "test",
+        "projects": {"test": "/tmp/basic-memory-test"},
+        "default_project": "test",
+        "semantic_search_enabled": True,
+        "semantic_embedding_provider": "litellm",
+        "semantic_embedding_model": "openai/text-embedding-3-small",
+    }
+    first_provider = create_embedding_provider(
+        BasicMemoryConfig(
+            **shared_config,
+            semantic_embedding_api_base="http://127.0.0.1:8080/v1",
+        )
+    )
+    second_provider = create_embedding_provider(
+        BasicMemoryConfig(
+            **shared_config,
+            semantic_embedding_api_base="http://127.0.0.1:8081/v1",
+        )
+    )
+
+    assert first_provider is not second_provider
 
 
 def test_factory_forwards_litellm_document_and_query_input_types():
