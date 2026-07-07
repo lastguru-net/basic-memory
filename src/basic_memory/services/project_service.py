@@ -989,6 +989,8 @@ class ProjectService:
         provider = config.semantic_embedding_provider
         model = config.semantic_embedding_model
         dimensions = config.semantic_embedding_dimensions
+        document_prefix_set = bool(config.semantic_embedding_document_prefix)
+        query_prefix_set = bool(config.semantic_embedding_query_prefix)
 
         is_postgres = config.database_backend == DatabaseBackend.POSTGRES
 
@@ -1025,6 +1027,8 @@ class ProjectService:
                 embedding_provider=provider,
                 embedding_model=model,
                 embedding_dimensions=dimensions,
+                embedding_document_prefix_set=document_prefix_set,
+                embedding_query_prefix_set=query_prefix_set,
                 total_indexed_entities=total_indexed_entities,
                 vector_tables_exist=False,
                 reindex_recommended=True,
@@ -1132,6 +1136,8 @@ class ProjectService:
                 embedding_provider=provider,
                 embedding_model=model,
                 embedding_dimensions=dimensions,
+                embedding_document_prefix_set=document_prefix_set,
+                embedding_query_prefix_set=query_prefix_set,
                 total_indexed_entities=total_indexed_entities,
                 vector_tables_exist=False,
                 reindex_recommended=True,
@@ -1164,6 +1170,8 @@ class ProjectService:
             embedding_provider=provider,
             embedding_model=model,
             embedding_dimensions=dimensions,
+            embedding_document_prefix_set=document_prefix_set,
+            embedding_query_prefix_set=query_prefix_set,
             total_indexed_entities=total_indexed_entities,
             total_entities_with_chunks=total_entities_with_chunks,
             total_chunks=total_chunks,
