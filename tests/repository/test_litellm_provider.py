@@ -443,26 +443,6 @@ async def test_factory_omits_litellm_api_key_when_unset(monkeypatch):
     assert "api_key" not in calls[0]
 
 
-def test_factory_does_not_cache_litellm_providers():
-    """LiteLLM request routing can change via config/env, so providers stay uncached."""
-    shared_config = {
-        "env": "test",
-        "projects": {"test": "/tmp/basic-memory-test"},
-        "default_project": "test",
-        "semantic_search_enabled": True,
-        "semantic_embedding_provider": "litellm",
-        "semantic_embedding_model": "openai/text-embedding-3-small",
-    }
-    config = BasicMemoryConfig(
-        **shared_config,
-        semantic_embedding_api_base="http://127.0.0.1:8080/v1",
-    )
-    first_provider = create_embedding_provider(config)
-    second_provider = create_embedding_provider(config)
-
-    assert first_provider is not second_provider
-
-
 def test_factory_forwards_litellm_document_and_query_input_types():
     """Factory should pass role-specific LiteLLM input_type config to the provider."""
     config = BasicMemoryConfig(

@@ -125,15 +125,7 @@ def create_embedding_provider(app_config: BasicMemoryConfig) -> EmbeddingProvide
     dimension because the vector table schema is created before the first
     embedding response is available.
     """
-    provider_name = app_config.semantic_embedding_provider.strip().lower()
-    # Trigger: LiteLLM provider instances carry request-routing state such as
-    # api_base/api_key, while equivalent LiteLLM settings may also come from
-    # environment variables outside Basic Memory's config model.
-    # Why: treating those values as embedding identity is inconsistent, and
-    # caching them risks stale request routing in long-lived processes.
-    # Outcome: cache only heavyweight local/API providers; LiteLLM construction is cheap.
-    cache_provider = provider_name != "litellm"
-    cache_key = _provider_cache_key(app_config) if cache_provider else None
+    cache_key = _provider_cache_key(app_config)
     # Trigger: two threads miss the cache for the same key concurrently.
     # Why: provider construction loads the ~2.3GB ONNX model and is slow, so we
     # deliberately build it *outside* the lock to avoid serializing every caller
@@ -142,17 +134,16 @@ def create_embedding_provider(app_config: BasicMemoryConfig) -> EmbeddingProvide
     # Outcome: the second check-and-set below resolves the race - the first writer
     # wins and the loser's redundant provider is discarded, so the cache still
     # yields a single process-wide singleton per key.
-    if cache_provider:
-        assert cache_key is not None
-        with _EMBEDDING_PROVIDER_CACHE_LOCK:
-            if cached_provider := _EMBEDDING_PROVIDER_CACHE.get(cache_key):
-                return cached_provider
+    with _EMBEDDING_PROVIDER_CACHE_LOCK:
+        if cached_provider := _EMBEDDING_PROVIDER_CACHE.get(cache_key):
+            return cached_provider
 
     extra_kwargs: dict = {}
     if app_config.semantic_embedding_dimensions is not None:
         extra_kwargs["dimensions"] = app_config.semantic_embedding_dimensions
 
     provider: EmbeddingProvider
+    provider_name = app_config.semantic_embedding_provider.strip().lower()
     if provider_name == "fastembed":
         # Deferred import: fastembed (and its onnxruntime dep) may not be installed
         from basic_memory.repository.fastembed_provider import FastEmbedEmbeddingProvider
@@ -216,10 +207,6 @@ def create_embedding_provider(app_config: BasicMemoryConfig) -> EmbeddingProvide
     else:
         raise ValueError(f"Unsupported semantic embedding provider: {provider_name}")
 
-    if not cache_provider:
-        return provider
-
-    assert cache_key is not None
     with _EMBEDDING_PROVIDER_CACHE_LOCK:
         if cached_provider := _EMBEDDING_PROVIDER_CACHE.get(cache_key):
             return cached_provider
