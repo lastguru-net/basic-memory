@@ -124,9 +124,9 @@ export BASIC_MEMORY_SEMANTIC_EMBEDDING_DOCUMENT_INPUT_TYPE=passage
 export BASIC_MEMORY_SEMANTIC_EMBEDDING_QUERY_INPUT_TYPE=query
 ```
 
-Changing provider, model, API base, dimensions, dimension-forwarding, or
-document/query roles changes the meaning of stored vectors. Rebuild embeddings
-after any of those changes:
+Changing provider, model, dimensions, dimension-forwarding, or document/query
+roles changes Basic Memory's stored vector identity. Rebuild embeddings after
+any of those changes:
 
 ```bash
 bm reindex --embeddings

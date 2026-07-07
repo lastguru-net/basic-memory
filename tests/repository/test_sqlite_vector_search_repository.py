@@ -347,8 +347,8 @@ def test_sqlite_embedding_model_key_includes_litellm_role_settings():
     assert "query_input_type=query" in passage_query_key
 
 
-def test_sqlite_embedding_model_key_includes_litellm_api_base():
-    """LiteLLM endpoint changes should invalidate chunks without storing raw URLs."""
+def test_sqlite_embedding_model_key_ignores_litellm_api_base():
+    """LiteLLM endpoint routing is not part of stored vector identity."""
     repo = _make_sqlite_repo_for_unit_tests()
     repo._embedding_provider = LiteLLMEmbeddingProvider(dimensions=3)
     default_endpoint_key = repo._embedding_model_key()
@@ -359,9 +359,8 @@ def test_sqlite_embedding_model_key_includes_litellm_api_base():
     )
     custom_endpoint_key = repo._embedding_model_key()
 
-    assert default_endpoint_key != custom_endpoint_key
-    assert "api_base_sha256=" not in default_endpoint_key
-    assert "api_base_sha256=" in custom_endpoint_key
+    assert default_endpoint_key == custom_endpoint_key
+    assert "api_base" not in custom_endpoint_key
     assert "token@example.test" not in custom_endpoint_key
 
 

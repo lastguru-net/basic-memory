@@ -261,8 +261,8 @@ just test-litellm-live --cases-file /tmp/litellm-nvidia-cases.json
 For repeatable local runs, put the same JSON array in a file and pass
 `just test-litellm-live --cases-file path/to/litellm-cases.json`.
 
-When switching providers, models, API bases, dimensions, or LiteLLM document/query input
-types, rebuild embeddings:
+When switching providers, models, dimensions, or LiteLLM document/query input types,
+rebuild embeddings:
 
 ```bash
 bm reindex --embeddings
@@ -332,7 +332,6 @@ bm reindex -p my-project
 - **Manual enable case**: If you explicitly had `semantic_search_enabled=false` and then turn it on
 - **Provider change**: After switching between `fastembed`, `openai`, and `litellm`
 - **Model change**: After changing `semantic_embedding_model`
-- **LiteLLM API base change**: After changing `semantic_embedding_api_base`
 - **Dimension change**: After changing `semantic_embedding_dimensions`
 - **LiteLLM role change**: After changing `semantic_embedding_document_input_type` or `semantic_embedding_query_input_type`
 

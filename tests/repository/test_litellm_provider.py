@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 from basic_memory.config import BasicMemoryConfig
-import basic_memory.repository.embedding_provider_factory as embedding_provider_factory_module
 from basic_memory.repository.embedding_provider_factory import (
     create_embedding_provider,
     reset_embedding_provider_cache,
@@ -149,17 +148,9 @@ async def test_litellm_provider_api_base_omitted_when_none(monkeypatch):
     assert "api_base" not in calls[0]
 
 
-def test_litellm_provider_identity_key_includes_api_base():
-    """Different endpoints should invalidate vectors without persisting raw URLs."""
+def test_litellm_provider_identity_key_ignores_api_base():
+    """Endpoint routing is not part of Basic Memory's persisted vector identity."""
     default_endpoint = LiteLLMEmbeddingProvider(dimensions=3)
-    first_endpoint = LiteLLMEmbeddingProvider(
-        dimensions=3,
-        api_base="http://token@example.test/v1",
-    )
-    second_endpoint = LiteLLMEmbeddingProvider(
-        dimensions=3,
-        api_base="http://other-token@example.test/v1",
-    )
     custom_endpoint = LiteLLMEmbeddingProvider(
         dimensions=3,
         api_base="http://127.0.0.1:8080/v1",
@@ -169,11 +160,9 @@ def test_litellm_provider_identity_key_includes_api_base():
         "openai/text-embedding-3-small:3:document_input_type=-:"
         "query_input_type=-:forward_dimensions=true"
     )
-    assert "api_base_sha256=" in custom_endpoint.identity_key()
+    assert custom_endpoint.identity_key() == default_endpoint.identity_key()
+    assert "api_base" not in custom_endpoint.identity_key()
     assert "127.0.0.1" not in custom_endpoint.identity_key()
-    assert default_endpoint.identity_key() != custom_endpoint.identity_key()
-    assert first_endpoint.identity_key() != second_endpoint.identity_key()
-    assert "token@example.test" not in first_endpoint.identity_key()
 
 
 @pytest.mark.asyncio
@@ -454,8 +443,8 @@ async def test_factory_omits_litellm_api_key_when_unset(monkeypatch):
     assert "api_key" not in calls[0]
 
 
-def test_factory_cache_separates_litellm_api_bases():
-    """Changing endpoints should create a provider with a distinct cache identity."""
+def test_factory_does_not_cache_litellm_providers():
+    """LiteLLM request routing can change via config/env, so providers stay uncached."""
     shared_config = {
         "env": "test",
         "projects": {"test": "/tmp/basic-memory-test"},
@@ -464,58 +453,14 @@ def test_factory_cache_separates_litellm_api_bases():
         "semantic_embedding_provider": "litellm",
         "semantic_embedding_model": "openai/text-embedding-3-small",
     }
-    first_provider = create_embedding_provider(
-        BasicMemoryConfig(
-            **shared_config,
-            semantic_embedding_api_base="http://127.0.0.1:8080/v1",
-        )
+    config = BasicMemoryConfig(
+        **shared_config,
+        semantic_embedding_api_base="http://127.0.0.1:8080/v1",
     )
-    second_provider = create_embedding_provider(
-        BasicMemoryConfig(
-            **shared_config,
-            semantic_embedding_api_base="http://127.0.0.1:8081/v1",
-        )
-    )
+    first_provider = create_embedding_provider(config)
+    second_provider = create_embedding_provider(config)
 
     assert first_provider is not second_provider
-    assert "127.0.0.1" not in repr(
-        embedding_provider_factory_module._provider_cache_key(
-            BasicMemoryConfig(
-                **shared_config,
-                semantic_embedding_api_base="http://127.0.0.1:8080/v1",
-            )
-        )
-    )
-
-
-def test_factory_cache_separates_litellm_api_keys_without_exposing_secret():
-    """Configured key changes need fresh providers, but cache keys must not leak keys."""
-    shared_config = {
-        "env": "test",
-        "projects": {"test": "/tmp/basic-memory-test"},
-        "default_project": "test",
-        "semantic_search_enabled": True,
-        "semantic_embedding_provider": "litellm",
-        "semantic_embedding_model": "openai/text-embedding-3-small",
-    }
-    first_config = BasicMemoryConfig(
-        **shared_config,
-        semantic_embedding_api_key="first-secret-key",
-    )
-    second_config = BasicMemoryConfig(
-        **shared_config,
-        semantic_embedding_api_key="second-secret-key",
-    )
-    first_provider = create_embedding_provider(first_config)
-    second_provider = create_embedding_provider(second_config)
-
-    assert first_provider is not second_provider
-    assert "first-secret-key" not in repr(
-        embedding_provider_factory_module._provider_cache_key(first_config)
-    )
-    assert "second-secret-key" not in repr(
-        embedding_provider_factory_module._provider_cache_key(second_config)
-    )
 
 
 def test_factory_forwards_litellm_document_and_query_input_types():
