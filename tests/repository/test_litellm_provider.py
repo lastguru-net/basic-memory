@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from basic_memory.config import BasicMemoryConfig
+import basic_memory.repository.embedding_provider_factory as embedding_provider_factory_module
 from basic_memory.repository.embedding_provider_factory import (
     create_embedding_provider,
     reset_embedding_provider_cache,
@@ -441,6 +442,61 @@ async def test_factory_omits_litellm_api_key_when_unset(monkeypatch):
     await provider.embed_query("test")
 
     assert "api_key" not in calls[0]
+
+
+def test_factory_cache_separates_litellm_api_bases_without_exposing_endpoint():
+    """Endpoint routing should separate cached providers without leaking raw URLs."""
+    shared_config = {
+        "env": "test",
+        "projects": {"test": "/tmp/basic-memory-test"},
+        "default_project": "test",
+        "semantic_search_enabled": True,
+        "semantic_embedding_provider": "litellm",
+        "semantic_embedding_model": "openai/text-embedding-3-small",
+    }
+    first_config = BasicMemoryConfig(
+        **shared_config,
+        semantic_embedding_api_base="http://token@example.test/v1",
+    )
+    second_config = BasicMemoryConfig(
+        **shared_config,
+        semantic_embedding_api_base="http://other-token@example.test/v1",
+    )
+    first_provider = create_embedding_provider(first_config)
+    second_provider = create_embedding_provider(second_config)
+
+    assert first_provider is not second_provider
+    first_cache_key = repr(embedding_provider_factory_module._provider_cache_key(first_config))
+    assert "token@example.test" not in first_cache_key
+    assert "api_base" not in first_cache_key
+
+
+def test_factory_cache_separates_litellm_api_keys_without_exposing_secret():
+    """Configured key routing should separate cached providers without leaking keys."""
+    shared_config = {
+        "env": "test",
+        "projects": {"test": "/tmp/basic-memory-test"},
+        "default_project": "test",
+        "semantic_search_enabled": True,
+        "semantic_embedding_provider": "litellm",
+        "semantic_embedding_model": "openai/text-embedding-3-small",
+    }
+    first_config = BasicMemoryConfig(
+        **shared_config,
+        semantic_embedding_api_key="first-secret-key",
+    )
+    second_config = BasicMemoryConfig(
+        **shared_config,
+        semantic_embedding_api_key="second-secret-key",
+    )
+    first_provider = create_embedding_provider(first_config)
+    second_provider = create_embedding_provider(second_config)
+
+    assert first_provider is not second_provider
+    first_cache_key = repr(embedding_provider_factory_module._provider_cache_key(first_config))
+    second_cache_key = repr(embedding_provider_factory_module._provider_cache_key(second_config))
+    assert "first-secret-key" not in first_cache_key
+    assert "second-secret-key" not in second_cache_key
 
 
 def test_factory_forwards_litellm_document_and_query_input_types():

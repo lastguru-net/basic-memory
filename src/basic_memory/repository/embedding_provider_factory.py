@@ -1,5 +1,6 @@
 """Factory for creating configured semantic embedding providers."""
 
+import hashlib
 import os
 from threading import Lock
 
@@ -9,16 +10,18 @@ from basic_memory.config import BasicMemoryConfig, default_fastembed_cache_dir
 from basic_memory.repository.embedding_provider import EmbeddingProvider
 
 # Cache key fields are limited to values that change the *identity* of the loaded
-# model (provider, model_name, dimensions, semantic role/input-type settings,
-# batch/request knobs, and the resolved cache dir). Thread/parallel knobs are
-# deliberately excluded - they change ONNX *execution* only, not the loaded weights.
-# Including them caused #872: in a
+# provider instance (provider, model_name, explicit LiteLLM endpoint/key routing,
+# dimensions, semantic role/input-type settings, batch/request knobs, and the
+# resolved cache dir). Thread/parallel knobs are deliberately excluded - they
+# change ONNX *execution* only, not the loaded weights. Including them caused #872: in a
 # container/cgroup the CPU-derived thread count can drift between calls, producing
 # a fresh cache key and reloading the ~2.3GB model into a CPU arena that never
 # returns memory to the OS.
 type ProviderCacheKey = tuple[
     str,
     str,
+    str | None,
+    str | None,
     int | None,
     bool | None,
     int,
@@ -31,6 +34,13 @@ type ProviderCacheKey = tuple[
 _EMBEDDING_PROVIDER_CACHE: dict[ProviderCacheKey, EmbeddingProvider] = {}
 _EMBEDDING_PROVIDER_CACHE_LOCK = Lock()
 _FASTEMBED_MAX_THREADS = 8
+
+
+def _sensitive_value_digest(value: str | None) -> str | None:
+    """Return a stable non-secret token for process-local cache diagnostics."""
+    if not value:
+        return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _resolve_cache_dir(app_config: BasicMemoryConfig) -> str:
@@ -86,7 +96,7 @@ def _resolve_fastembed_runtime_knobs(
 
 
 def _provider_cache_key(app_config: BasicMemoryConfig) -> ProviderCacheKey:
-    """Build a stable cache key from model-identity semantic embedding config.
+    """Build a stable cache key from process-local embedding provider config.
 
     Uses the *resolved* cache dir - not the raw config field - so different
     FASTEMBED_CACHE_PATH values produce distinct cache keys even when the
@@ -97,9 +107,17 @@ def _provider_cache_key(app_config: BasicMemoryConfig) -> ProviderCacheKey:
     runtime CPU budget makes the key drift between calls in a container (#872).
     """
     provider_name = app_config.semantic_embedding_provider.strip().lower()
+    litellm_api_base_digest = None
+    litellm_api_key_digest = None
+    if provider_name == "litellm":
+        litellm_api_base_digest = _sensitive_value_digest(app_config.semantic_embedding_api_base)
+        litellm_api_key_digest = _sensitive_value_digest(app_config.semantic_embedding_api_key)
+
     return (
         provider_name,
         app_config.semantic_embedding_model,
+        litellm_api_base_digest,
+        litellm_api_key_digest,
         app_config.semantic_embedding_dimensions,
         app_config.semantic_embedding_forward_dimensions,
         app_config.semantic_embedding_batch_size,
