@@ -254,6 +254,14 @@ class BasicMemoryConfig(BaseSettings):
             "Use this for OpenAI-compatible local or self-hosted embedding servers."
         ),
     )
+    semantic_embedding_api_key: str | None = Field(
+        default=None,
+        description=(
+            "Optional API key passed directly to the LiteLLM embedding provider. "
+            "When unset, LiteLLM continues to resolve credentials from provider "
+            "environment variables such as OPENAI_API_KEY."
+        ),
+    )
     semantic_embedding_dimensions: int | None = Field(
         default=None,
         description=(

@@ -14,6 +14,7 @@ supported embedding models.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import math
 import os
 from typing import Any
@@ -62,6 +63,11 @@ def _should_forward_dimensions(model_name: str, forward_dimensions: bool | None)
     # Outcome: OpenAI/Azure text-embedding-3 reductions work, while fixed-size
     # providers keep dimensions local to Basic Memory.
     return "text-embedding-3" in normalized
+
+
+def _identity_digest(value: str) -> str:
+    """Digest endpoint material before it can be stored in vector metadata."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _import_litellm() -> Any:
@@ -140,7 +146,7 @@ class LiteLLMEmbeddingProvider(EmbeddingProvider):
         )
         if self._api_base is None:
             return identity
-        return f"{identity}:api_base={self._api_base}"
+        return f"{identity}:api_base_sha256={_identity_digest(self._api_base)}"
 
     async def _embed(self, texts: list[str], *, input_type: str | None) -> list[list[float]]:
         if not texts:
